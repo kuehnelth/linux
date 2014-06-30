@@ -464,6 +464,39 @@ out:
 	return ret;
 }
 
+int ieee802154_poll_req(struct sk_buff *skb, struct genl_info *info)
+{
+	struct net_device *dev;
+	struct ieee802154_addr addr;
+	int ret = -EOPNOTSUPP;
+
+	if ((!info->attrs[IEEE802154_ATTR_DEST_HW_ADDR] &&
+		!info->attrs[IEEE802154_ATTR_DEST_SHORT_ADDR]))
+		return -EINVAL;
+
+	dev = ieee802154_nl_get_dev(info);
+	if (!dev)
+		return -ENODEV;
+	if (!ieee802154_mlme_ops(dev)->poll_req)
+		goto out;
+
+	if (info->attrs[IEEE802154_ATTR_DEST_HW_ADDR]) {
+		addr.mode = IEEE802154_ADDR_LONG;
+		addr.extended_addr = nla_get_hwaddr(
+				info->attrs[IEEE802154_ATTR_DEST_HW_ADDR]);
+	} else {
+		addr.mode = IEEE802154_ADDR_SHORT;
+		addr.short_addr = nla_get_shortaddr(
+				info->attrs[IEEE802154_ATTR_DEST_SHORT_ADDR]);
+	}
+	addr.pan_id = ieee802154_mlme_ops(dev)->get_pan_id(dev);
+
+	ret = ieee802154_mlme_ops(dev)->poll_req(dev, &addr);
+out:
+	dev_put(dev);
+	return ret;
+}
+
 /*
  * PANid, channel, beacon_order = 15, superframe_order = 15,
  * PAN_coordinator, battery_life_extension = 0,

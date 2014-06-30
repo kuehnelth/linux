@@ -62,6 +62,7 @@ enum ieee802154_mcgrp_ids {
 int ieee802154_associate_req(struct sk_buff *skb, struct genl_info *info);
 int ieee802154_associate_resp(struct sk_buff *skb, struct genl_info *info);
 int ieee802154_disassociate_req(struct sk_buff *skb, struct genl_info *info);
+int ieee802154_poll_req(struct sk_buff *skb, struct genl_info *info);
 int ieee802154_scan_req(struct sk_buff *skb, struct genl_info *info);
 int ieee802154_start_req(struct sk_buff *skb, struct genl_info *info);
 int ieee802154_list_iface(struct sk_buff *skb, struct genl_info *info);

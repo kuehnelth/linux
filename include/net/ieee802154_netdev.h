@@ -226,6 +226,7 @@ struct ieee802154_mac_cb {
 	bool ackreq;
 	bool secen;
 	bool secen_override;
+	bool intrapan;
 	u8 seclevel;
 	bool seclevel_override;
 	struct ieee802154_addr source;
@@ -417,6 +418,8 @@ struct ieee802154_mlme_ops {
 			u8 pan_coord, u8 blx, u8 coord_realign);
 	int (*scan_req)(struct net_device *dev,
 			u8 type, u32 channels, u8 page, u8 duration);
+	int (*poll_req)(struct net_device *dev,
+			struct ieee802154_addr *addr);
 
 	int (*set_mac_params)(struct net_device *dev,
 			      const struct ieee802154_mac_params *params);

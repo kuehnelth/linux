@@ -24,6 +24,7 @@
 #define MAC802154_H
 
 #include <linux/mutex.h>
+#include <linux/list.h>
 #include <net/mac802154.h>
 #include <net/ieee802154_netdev.h>
 
@@ -101,6 +102,16 @@ struct mac802154_sub_if_data {
 	struct mutex sec_mtx;
 
 	struct mac802154_llsec sec;
+
+	struct list_head pending_list;
+	bool indirect_send;
+	bool indirect_response;
+};
+
+struct pending_data_list {
+	struct sk_buff *data;
+	int time;
+	struct list_head list;
 };
 
 #define mac802154_to_priv(_hw)	container_of(_hw, struct mac802154_priv, hw)
@@ -109,6 +120,8 @@ struct mac802154_sub_if_data {
 
 extern struct ieee802154_reduced_mlme_ops mac802154_mlme_reduced;
 extern struct ieee802154_mlme_ops mac802154_mlme_wpan;
+
+int mac802154_process_cmd(struct net_device *dev, struct sk_buff *skb);
 
 int mac802154_slave_open(struct net_device *dev);
 int mac802154_slave_close(struct net_device *dev);

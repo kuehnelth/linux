@@ -315,6 +315,7 @@ static netdev_tx_t
 mac802154_wpan_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct mac802154_sub_if_data *priv;
+	struct pending_data_list entry;
 	u8 chan, page;
 	int rc;
 
@@ -343,7 +344,17 @@ mac802154_wpan_xmit(struct sk_buff *skb, struct net_device *dev)
 	dev->stats.tx_packets++;
 	dev->stats.tx_bytes += skb->len;
 
-	return mac802154_tx(priv->hw, skb, page, chan);
+	if (priv->indirect_send == false || priv->indirect_response == true) {
+		pr_debug("%s(): direct send from %X\n", __func__, priv->short_addr);
+		priv->indirect_response = false;
+		return mac802154_tx(priv->hw, skb, page, chan);
+	}
+
+	entry.data = skb_copy(skb, 0);
+	INIT_LIST_HEAD(&entry.list);
+	list_add_tail(&entry.list, &priv->pending_list);
+
+	return NETDEV_TX_BUSY;
 }
 
 static struct header_ops mac802154_header_ops = {
@@ -393,6 +404,10 @@ void mac802154_wpan_setup(struct net_device *dev)
 
 	priv->chan = MAC802154_CHAN_NONE;
 	priv->page = 0;
+	INIT_LIST_HEAD(&priv->pending_list);
+
+	priv->indirect_send = false;
+	priv->indirect_response = false;
 
 	spin_lock_init(&priv->mib_lock);
 	mutex_init(&priv->sec_mtx);
@@ -410,6 +425,14 @@ void mac802154_wpan_setup(struct net_device *dev)
 	priv->short_addr = cpu_to_le16(IEEE802154_ADDR_BROADCAST);
 
 	mac802154_llsec_init(&priv->sec);
+}
+
+static int mac802154_process_ack(struct net_device *dev, struct sk_buff *skb)
+{
+	pr_debug("got ACK\n");
+
+	kfree_skb(skb);
+	return NET_RX_SUCCESS;
 }
 
 static int mac802154_process_data(struct net_device *dev, struct sk_buff *skb)
@@ -469,12 +492,14 @@ mac802154_subif_frame(struct mac802154_sub_if_data *sdata, struct sk_buff *skb,
 
 	skb->dev = sdata->dev;
 
+	pr_debug("%s() pre-decrypt\n", __func__);
 	rc = mac802154_llsec_decrypt(&sdata->sec, skb);
 	if (rc) {
 		pr_debug("decryption failed: %i\n", rc);
 		kfree_skb(skb);
 		return NET_RX_DROP;
 	}
+	pr_debug("%s() post-decrypt type:%d\n", __func__, mac_cb(skb)->type);
 
 	sdata->dev->stats.rx_packets++;
 	sdata->dev->stats.rx_bytes += skb->len;
@@ -482,6 +507,11 @@ mac802154_subif_frame(struct mac802154_sub_if_data *sdata, struct sk_buff *skb,
 	switch (mac_cb(skb)->type) {
 	case IEEE802154_FC_TYPE_DATA:
 		return mac802154_process_data(sdata->dev, skb);
+	case IEEE802154_FC_TYPE_ACK:
+		return mac802154_process_ack(sdata->dev, skb);
+	case IEEE802154_FC_TYPE_MAC_CMD:
+		pr_debug("process_cmd\n");
+		return mac802154_process_cmd(sdata->dev, skb);
 	default:
 		pr_warn("ieee802154: bad frame received (type = %d)\n",
 			mac_cb(skb)->type);
@@ -525,6 +555,7 @@ static int mac802154_parse_frame_start(struct sk_buff *skb,
 	cb->type = hdr->fc.type;
 	cb->ackreq = hdr->fc.ack_request;
 	cb->secen = hdr->fc.security_enabled;
+	cb->intrapan = hdr->fc.intra_pan;
 
 	mac802154_print_addr("destination", &hdr->dest);
 	mac802154_print_addr("source", &hdr->source);
@@ -575,6 +606,8 @@ void mac802154_wpans_rx(struct mac802154_priv *priv, struct sk_buff *skb)
 		pr_debug("got invalid frame\n");
 		return;
 	}
+
+	pr_debug("%s() frame %d\n", __func__, mac_cb(skb)->type);
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(sdata, &priv->slaves, list) {

@@ -20,6 +20,7 @@
  * Dmitry Eremin-Solenikov <dbaryshkov@gmail.com>
  * Alexander Smirnov <alex.bluesman.smirnov@gmail.com>
  */
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
@@ -743,6 +744,9 @@ at86rf230_set_hw_addr_filt(struct ieee802154_dev *dev,
 {
 	struct at86rf230_local *lp = dev->priv;
 
+	at86rf230_write_subreg(lp, SR_AACK_SET_PD, 1);
+	pr_debug("SR_AACK_SET_PD\n");
+
 	if (changed & IEEE802515_AFILT_SADDR_CHANGED) {
 		u16 addr = le16_to_cpu(filt->short_addr);
 
@@ -774,9 +778,11 @@ at86rf230_set_hw_addr_filt(struct ieee802154_dev *dev,
 	if (changed & IEEE802515_AFILT_PANC_CHANGED) {
 		dev_vdbg(&lp->spi->dev,
 			"at86rf230_set_hw_addr_filt called for panc change\n");
-		if (filt->pan_coord)
+		if (filt->pan_coord) {
 			at86rf230_write_subreg(lp, SR_AACK_I_AM_COORD, 1);
-		else
+			at86rf230_write_subreg(lp, SR_AACK_SET_PD, 1);
+			dev_dbg(&lp->spi->dev, "SR_AACK_SET_PD\n");
+		} else
 			at86rf230_write_subreg(lp, SR_AACK_I_AM_COORD, 0);
 	}
 
