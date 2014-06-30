@@ -422,6 +422,10 @@ struct ieee802154_mlme_ops {
 			      const struct ieee802154_mac_params *params);
 	void (*get_mac_params)(struct net_device *dev,
 			       struct ieee802154_mac_params *params);
+	int (*data_req)(struct net_device *dev,
+			struct ieee802154_addr *addr,
+			u32 msdu_len,
+			void *msdu);
 
 	struct ieee802154_llsec_ops *llsec;
 
